@@ -194,23 +194,24 @@ type OntapEconomyStorageBackendPool struct {
 }
 
 type OntapStorageDriverConfigDefaults struct {
-	SpaceAllocation   string `json:"spaceAllocation"`
-	SpaceReserve      string `json:"spaceReserve"`
-	SnapshotPolicy    string `json:"snapshotPolicy"`
-	SnapshotReserve   string `json:"snapshotReserve"`
-	SnapshotDir       string `json:"snapshotDir"`
-	UnixPermissions   string `json:"unixPermissions"`
-	ExportPolicy      string `json:"exportPolicy"`
-	SecurityStyle     string `json:"securityStyle"`
-	SplitOnClone      string `json:"splitOnClone"`
-	FileSystemType    string `json:"fileSystemType"`
-	Encryption        string `json:"encryption"`
-	LUKSEncryption    string `json:"LUKSEncryption"`
-	Mirroring         string `json:"mirroring"`
-	TieringPolicy     string `json:"tieringPolicy"`
-	QosPolicy         string `json:"qosPolicy"`
-	AdaptiveQosPolicy string `json:"adaptiveQosPolicy"`
-	FormatOptions     string `json:"formatOptions"`
+	SpaceAllocation    string `json:"spaceAllocation"`
+	SpaceReserve       string `json:"spaceReserve"`
+	SnapshotPolicy     string `json:"snapshotPolicy"`
+	SnapshotReserve    string `json:"snapshotReserve"`
+	LUNMetadataReserve string `json:"LUNMetadataReserve"`
+	SnapshotDir        string `json:"snapshotDir"`
+	UnixPermissions    string `json:"unixPermissions"`
+	ExportPolicy       string `json:"exportPolicy"`
+	SecurityStyle      string `json:"securityStyle"`
+	SplitOnClone       string `json:"splitOnClone"`
+	FileSystemType     string `json:"fileSystemType"`
+	Encryption         string `json:"encryption"`
+	LUKSEncryption     string `json:"LUKSEncryption"`
+	Mirroring          string `json:"mirroring"`
+	TieringPolicy      string `json:"tieringPolicy"`
+	QosPolicy          string `json:"qosPolicy"`
+	AdaptiveQosPolicy  string `json:"adaptiveQosPolicy"`
+	FormatOptions      string `json:"formatOptions"`
 	CommonStorageDriverConfigDefaults
 }
 

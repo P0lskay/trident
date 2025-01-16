@@ -346,18 +346,19 @@ func (d *SANStorageDriver) Create(
 	spaceAllocation, _ := strconv.ParseBool(
 		collection.GetV(opts, "spaceAllocation", storagePool.InternalAttributes()[SpaceAllocation]))
 	var (
-		spaceReserve      = collection.GetV(opts, "spaceReserve", storagePool.InternalAttributes()[SpaceReserve])
-		snapshotPolicy    = collection.GetV(opts, "snapshotPolicy", storagePool.InternalAttributes()[SnapshotPolicy])
-		snapshotReserve   = collection.GetV(opts, "snapshotReserve", storagePool.InternalAttributes()[SnapshotReserve])
-		unixPermissions   = collection.GetV(opts, "unixPermissions", storagePool.InternalAttributes()[UnixPermissions])
-		exportPolicy      = collection.GetV(opts, "exportPolicy", storagePool.InternalAttributes()[ExportPolicy])
-		securityStyle     = collection.GetV(opts, "securityStyle", storagePool.InternalAttributes()[SecurityStyle])
-		encryption        = collection.GetV(opts, "encryption", storagePool.InternalAttributes()[Encryption])
-		tieringPolicy     = collection.GetV(opts, "tieringPolicy", storagePool.InternalAttributes()[TieringPolicy])
-		formatOptions     = collection.GetV(opts, "formatOptions", storagePool.InternalAttributes()[FormatOptions])
-		qosPolicy         = storagePool.InternalAttributes()[QosPolicy]
-		adaptiveQosPolicy = storagePool.InternalAttributes()[AdaptiveQosPolicy]
-		luksEncryption    = storagePool.InternalAttributes()[LUKSEncryption]
+		spaceReserve       = collection.GetV(opts, "spaceReserve", storagePool.InternalAttributes()[SpaceReserve])
+		snapshotPolicy     = collection.GetV(opts, "snapshotPolicy", storagePool.InternalAttributes()[SnapshotPolicy])
+		snapshotReserve    = collection.GetV(opts, "snapshotReserve", storagePool.InternalAttributes()[SnapshotReserve])
+		LUNMetadataReserve = collection.GetV(opts, "LUNMetadataReserve", storagePool.InternalAttributes()[LUNMetadataReserve])
+		unixPermissions    = collection.GetV(opts, "unixPermissions", storagePool.InternalAttributes()[UnixPermissions])
+		exportPolicy       = collection.GetV(opts, "exportPolicy", storagePool.InternalAttributes()[ExportPolicy])
+		securityStyle      = collection.GetV(opts, "securityStyle", storagePool.InternalAttributes()[SecurityStyle])
+		encryption         = collection.GetV(opts, "encryption", storagePool.InternalAttributes()[Encryption])
+		tieringPolicy      = collection.GetV(opts, "tieringPolicy", storagePool.InternalAttributes()[TieringPolicy])
+		formatOptions      = collection.GetV(opts, "formatOptions", storagePool.InternalAttributes()[FormatOptions])
+		qosPolicy          = storagePool.InternalAttributes()[QosPolicy]
+		adaptiveQosPolicy  = storagePool.InternalAttributes()[AdaptiveQosPolicy]
+		luksEncryption     = storagePool.InternalAttributes()[LUKSEncryption]
 	)
 
 	snapshotReserveInt, err := GetSnapshotReserve(snapshotPolicy, snapshotReserve)
@@ -365,6 +366,10 @@ func (d *SANStorageDriver) Create(
 		return fmt.Errorf("invalid value for snapshotReserve: %v", err)
 	}
 
+	LUNMetadataReserveInt, err := GetLUNMetadataReserve(LUNMetadataReserve)
+	if err != nil {
+		return fmt.Errorf("invalid value for LUNMetadataReserve: %v", err)
+	}
 	// Determine volume size in bytes
 	requestedSize, err := capacity.ToBytes(volConfig.Size)
 	if err != nil {
@@ -386,7 +391,7 @@ func (d *SANStorageDriver) Create(
 	// Get the flexvol size based on the snapshot reserve
 	flexvolSize := drivers.CalculateVolumeSizeBytes(ctx, name, lunSizeBytes, snapshotReserveInt)
 	// Add extra 10% to the Flexvol to account for LUN metadata
-	flexvolBufferSize := uint64(LUNMetadataBufferMultiplier * float64(flexvolSize))
+	flexvolBufferSize := uint64((1 + float64(LUNMetadataReserveInt)/100) * float64(flexvolSize))
 
 	volumeSize := strconv.FormatUint(flexvolBufferSize, 10)
 
@@ -1437,7 +1442,7 @@ func (d *SANStorageDriver) Resize(
 
 	newFlexvolSize := drivers.CalculateVolumeSizeBytes(ctx, name, requestedSizeBytes, snapshotReserveInt)
 
-	newFlexvolSize = uint64(LUNMetadataBufferMultiplier * float64(newFlexvolSize))
+	newFlexvolSize = uint64(LUNMetadataReserve * float64(newFlexvolSize))
 
 	sameLUNSize := capacity.VolumeSizeWithinTolerance(int64(requestedSizeBytes), int64(currentLunSize),
 		tridentconfig.SANResizeDelta)

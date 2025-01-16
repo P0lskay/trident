@@ -66,10 +66,10 @@ import (
 // //////////////////////////////////////////////////////////////////////////////////////////
 
 const (
-	MinimumVolumeSizeBytes      = 20971520 // 20 MiB
-	HousekeepingStartupDelay    = 10 * time.Second
-	LUNMetadataBufferMultiplier = 1.1 // 10%
-	MaximumIgroupNameLength     = 96  // 96 characters is the maximum character count for ONTAP igroups.
+	MinimumVolumeSizeBytes   = 20971520 // 20 MiB
+	HousekeepingStartupDelay = 10 * time.Second
+	LUNMetadataReserve2      = 1.1 // 10%
+	MaximumIgroupNameLength  = 96  // 96 characters is the maximum character count for ONTAP igroups.
 
 	// Constants for internal pool attributes
 	Size                  = "size"
@@ -98,6 +98,7 @@ const (
 	TieringPolicy         = "tieringPolicy"
 	QosPolicy             = "qosPolicy"
 	AdaptiveQosPolicy     = "adaptiveQosPolicy"
+	LUNMetadataReserve    = "LUNMetadataReserve"
 	maxFlexGroupCloneWait = 120 * time.Second
 	maxFlexvolCloneWait   = 30 * time.Second
 
@@ -1569,6 +1570,7 @@ const DefaultSpaceAllocation = "true"
 const (
 	DefaultSpaceReserve              = "none"
 	DefaultSnapshotPolicy            = "none"
+	DefaultLUNMetadataReserve        = "10"
 	DefaultSnapshotReserve           = "5"
 	DefaultUnixPermissions           = "---rwxrwxrwx"
 	DefaultSnapshotDir               = "false"
@@ -1618,6 +1620,10 @@ func PopulateConfigurationDefaults(ctx context.Context, config *drivers.OntapSto
 
 	if config.SpaceAllocation == "" {
 		config.SpaceAllocation = DefaultSpaceAllocation
+	}
+
+	if config.LUNMetadataReserve == "" {
+		config.LUNMetadataReserve = DefaultLUNMetadataReserve
 	}
 
 	if config.SpaceReserve == "" {
@@ -1765,6 +1771,7 @@ func PopulateConfigurationDefaults(ctx context.Context, config *drivers.OntapSto
 		"StoragePrefix":          *config.StoragePrefix,
 		"SpaceAllocation":        config.SpaceAllocation,
 		"SpaceReserve":           config.SpaceReserve,
+		"LUNMetadataReserve":     config.LUNMetadataReserve,
 		"SnapshotPolicy":         config.SnapshotPolicy,
 		"SnapshotReserve":        config.SnapshotReserve,
 		"UnixPermissions":        config.UnixPermissions,
@@ -1966,6 +1973,22 @@ func GetSnapshotReserve(snapshotPolicy, snapshotReserve string) (int, error) {
 			}
 			return snapshotReserve, nil
 		}
+	}
+}
+
+func GetLUNMetadataReserve(LUNMetadataReserve string) (int, error) {
+	if LUNMetadataReserve != "" {
+		LUNMetadataReserve, err := convert.ToPositiveInt(LUNMetadataReserve)
+		if err != nil {
+			return api.NumericalValueNotSet, err
+		}
+		return LUNMetadataReserve, nil
+	} else {
+		LUNMetadataReserve, err := convert.ToPositiveInt(DefaultLUNMetadataReserve)
+		if err != nil {
+			return api.NumericalValueNotSet, err
+		}
+		return LUNMetadataReserve, nil
 	}
 }
 
@@ -2427,6 +2450,10 @@ func InitializeStoragePoolsCommon(
 			pool.InternalAttributes()[FormatOptions] = strings.TrimSpace(config.FormatOptions)
 		}
 
+		if d.Name() == tridentconfig.OntapSANStorageDriverName {
+			pool.InternalAttributes()[LUNMetadataReserve] = config.LUNMetadataReserve
+		}
+
 		physicalPools[pool.Name()] = pool
 	}
 
@@ -2476,6 +2503,11 @@ func InitializeStoragePoolsCommon(
 		snapshotReserve := config.SnapshotReserve
 		if vpool.SnapshotReserve != "" {
 			snapshotReserve = vpool.SnapshotReserve
+		}
+
+		LUNMetadataReserve := config.LUNMetadataReserve
+		if vpool.LUNMetadataReserve != "" {
+			LUNMetadataReserve = vpool.LUNMetadataReserve
 		}
 
 		splitOnClone := config.SplitOnClone
@@ -2614,6 +2646,10 @@ func InitializeStoragePoolsCommon(
 			pool.InternalAttributes()[SpaceAllocation] = spaceAllocation
 			pool.InternalAttributes()[FileSystemType] = fileSystemType
 			pool.InternalAttributes()[FormatOptions] = formatOptions
+		}
+
+		if d.Name() == tridentconfig.OntapSANStorageDriverName {
+			pool.InternalAttributes()[LUNMetadataReserve] = LUNMetadataReserve
 		}
 
 		virtualPools[pool.Name()] = pool
@@ -2911,6 +2947,9 @@ func getVolumeOptsCommon(
 	if volConfig.SnapshotReserve != "" {
 		opts["snapshotReserve"] = volConfig.SnapshotReserve
 	}
+	if volConfig.LUNMetadataReserve != "" {
+		opts["LUNMetadataReserve"] = volConfig.LUNMetadataReserve
+	}
 	if volConfig.UnixPermissions != "" {
 		opts["unixPermissions"] = volConfig.UnixPermissions
 	}
@@ -3168,6 +3207,26 @@ func getSnapshotReserveFromOntap(
 	}
 
 	return snapshotReserveInt, nil
+}
+
+func getLUNMetadataReserveFromOntap(
+	ctx context.Context, name string, GetVolumeInfo GetVolumeInfoFunc,
+) (int, error) {
+	LUNMetadataReserveInt := 10
+
+	info, err := GetVolumeInfo(ctx, name)
+	if err != nil {
+		return LUNMetadataReserveInt, fmt.Errorf("invalid value for LUNMetadataReserve: %v", err)
+	}
+
+	LUNMetadataReserveInt = info.LUNMetadataReserve
+
+	LUNMetadataReserveInt, err = GetLUNMetadataReserve(strconv.Itoa(LUNMetadataReserveInt))
+	if err != nil {
+		return LUNMetadataReserveInt, fmt.Errorf("invalid value for LUNMetadataReserve: %v", err)
+	}
+
+	return LUNMetadataReserveInt, nil
 }
 
 func isFlexvolRW(ctx context.Context, ontap api.OntapAPI, name string) (bool, error) {

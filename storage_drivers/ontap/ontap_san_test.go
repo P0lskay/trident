@@ -3171,7 +3171,7 @@ func TestOntapSANStorageDriverResize(t *testing.T) {
 	mockAPI.EXPECT().LunSize(ctx, "trident-pvc-1234").Return(1073741824, nil)
 	mockAPI.EXPECT().VolumeInfo(ctx, "trident-pvc-1234").AnyTimes().Return(&volume, nil)
 	mockAPI.EXPECT().VolumeSetSize(ctx, "trident-pvc-1234",
-		"2362232012").Return(nil) // LUNMetadataBufferMultiplier * 1.1
+		"2362232012").Return(nil) // LUNMetadataReserve * 1.1
 	mockAPI.EXPECT().LunSetSize(ctx, "/vol/trident-pvc-1234/lun0", "2147483648").Return(uint64(214748364), nil)
 
 	err := driver.Resize(ctx, &volConfig, 2147483648) // 2GB

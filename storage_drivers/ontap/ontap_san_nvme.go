@@ -278,23 +278,29 @@ func (d *NVMeStorageDriver) Create(
 	spaceAllocation, _ := strconv.ParseBool(
 		collection.GetV(opts, "spaceAllocation", storagePool.InternalAttributes()[SpaceAllocation]))
 	var (
-		spaceReserve      = collection.GetV(opts, "spaceReserve", storagePool.InternalAttributes()[SpaceReserve])
-		snapshotPolicy    = collection.GetV(opts, "snapshotPolicy", storagePool.InternalAttributes()[SnapshotPolicy])
-		snapshotReserve   = collection.GetV(opts, "snapshotReserve", storagePool.InternalAttributes()[SnapshotReserve])
-		unixPermissions   = collection.GetV(opts, "unixPermissions", storagePool.InternalAttributes()[UnixPermissions])
-		snapshotDir       = "false"
-		exportPolicy      = collection.GetV(opts, "exportPolicy", storagePool.InternalAttributes()[ExportPolicy])
-		securityStyle     = collection.GetV(opts, "securityStyle", storagePool.InternalAttributes()[SecurityStyle])
-		encryption        = collection.GetV(opts, "encryption", storagePool.InternalAttributes()[Encryption])
-		tieringPolicy     = collection.GetV(opts, "tieringPolicy", storagePool.InternalAttributes()[TieringPolicy])
-		qosPolicy         = storagePool.InternalAttributes()[QosPolicy]
-		adaptiveQosPolicy = storagePool.InternalAttributes()[AdaptiveQosPolicy]
-		luksEncryption    = storagePool.InternalAttributes()[LUKSEncryption]
+		spaceReserve       = collection.GetV(opts, "spaceReserve", storagePool.InternalAttributes()[SpaceReserve])
+		snapshotPolicy     = collection.GetV(opts, "snapshotPolicy", storagePool.InternalAttributes()[SnapshotPolicy])
+		snapshotReserve    = collection.GetV(opts, "snapshotReserve", storagePool.InternalAttributes()[SnapshotReserve])
+		LUNMetadataReserve = collection.GetV(opts, "LUNMetadataReserve", storagePool.InternalAttributes()[LUNMetadataReserve])
+		unixPermissions    = collection.GetV(opts, "unixPermissions", storagePool.InternalAttributes()[UnixPermissions])
+		snapshotDir        = "false"
+		exportPolicy       = collection.GetV(opts, "exportPolicy", storagePool.InternalAttributes()[ExportPolicy])
+		securityStyle      = collection.GetV(opts, "securityStyle", storagePool.InternalAttributes()[SecurityStyle])
+		encryption         = collection.GetV(opts, "encryption", storagePool.InternalAttributes()[Encryption])
+		tieringPolicy      = collection.GetV(opts, "tieringPolicy", storagePool.InternalAttributes()[TieringPolicy])
+		qosPolicy          = storagePool.InternalAttributes()[QosPolicy]
+		adaptiveQosPolicy  = storagePool.InternalAttributes()[AdaptiveQosPolicy]
+		luksEncryption     = storagePool.InternalAttributes()[LUKSEncryption]
 	)
 
 	snapshotReserveInt, err := GetSnapshotReserve(snapshotPolicy, snapshotReserve)
 	if err != nil {
 		return fmt.Errorf("invalid value for snapshotReserve: %v", err)
+	}
+
+	LUNMetadataReserveInt, err := GetLUNMetadataReserve(LUNMetadataReserve)
+	if err != nil {
+		return fmt.Errorf("invalid value for LUNMetadataReserve: %v", err)
 	}
 
 	// Determine volume size in bytes.
@@ -318,7 +324,7 @@ func (d *NVMeStorageDriver) Create(
 	// Get the FlexVol size based on the snapshot reserve.
 	flexVolSize := drivers.CalculateVolumeSizeBytes(ctx, name, namespaceSizeBytes, snapshotReserveInt)
 	// Add extra 10% to the FlexVol to account for Namespace metadata.
-	flexVolBufferSize := uint64(LUNMetadataBufferMultiplier * float64(flexVolSize))
+	flexVolBufferSize := uint64((1 + float64(LUNMetadataReserveInt)/100) * float64(flexVolSize))
 
 	volumeSize := strconv.FormatUint(flexVolBufferSize, 10)
 
@@ -1349,7 +1355,7 @@ func (d *NVMeStorageDriver) Resize(
 	}
 
 	newFlexVolSize := drivers.CalculateVolumeSizeBytes(ctx, name, requestedSizeBytes, snapshotReserveInt)
-	newFlexVolSize = uint64(LUNMetadataBufferMultiplier * float64(newFlexVolSize))
+	newFlexVolSize = uint64(LUNMetadataReserve * float64(newFlexVolSize))
 
 	sameNamespaceSize := capacity.VolumeSizeWithinTolerance(int64(requestedSizeBytes), nsSizeBytes,
 		tridentconfig.SANResizeDelta)
